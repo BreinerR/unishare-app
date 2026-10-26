@@ -23,8 +23,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Importación y montaje de rutas principales (placeholders modulares)
+// Importación y montaje de rutas principales
+app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/users', require('./routes/usuario.routes'));
 app.use('/api/usuarios', require('./routes/usuario.routes'));
+app.use('/api/zones', require('./routes/zone.routes'));
 app.use('/api/objetos', require('./routes/objeto.routes'));
 app.use('/api/solicitudes', require('./routes/solicitud.routes'));
 app.use('/api/prestamos', require('./routes/prestamo.routes'));

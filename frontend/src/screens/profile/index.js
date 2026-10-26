@@ -1,2 +1,1 @@
-// Pantallas de Perfil, Reputación y Calificaciones
-export default {};
+export { default as ProfileScreen } from './ProfileScreen';

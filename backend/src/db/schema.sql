@@ -26,9 +26,10 @@ CREATE TYPE estado_reporte AS ENUM ('pendiente', 'en_revision', 'resuelto', 'des
 -- ------------------------------------------------------------------------------
 CREATE TABLE usuarios (
     id SERIAL PRIMARY KEY,
-    uid_auth VARCHAR(128) UNIQUE NOT NULL, -- UID Firebase Auth / Supabase / Auth0
+    uid_auth VARCHAR(128) UNIQUE DEFAULT uuid_generate_v4()::text, -- Identificador único complementario
     nombre VARCHAR(120) NOT NULL,
     correo VARCHAR(150) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL, -- Hash seguro con bcrypt
     foto_perfil VARCHAR(500),
     ubicacion_general VARCHAR(150) NOT NULL, -- ej. Campus Central, Facultad de Ingeniería
     reputacion NUMERIC(3,2) DEFAULT 5.00 CHECK (reputacion >= 1.00 AND reputacion <= 5.00),
