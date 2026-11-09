@@ -12,20 +12,70 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import Colors, { EUCALIPTO_PALETTE } from '../../constants/colors';
-import GoogleAuthService from '../../services/googleAuth';
+import GoogleAccountSelectorModal from '../../components/auth/GoogleAccountSelectorModal';
+import { validatePassword } from '../../utils/validators';
 
 export default function LoginScreen({ navigation }) {
   const { login, loginWithGoogle } = useAuth();
 
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
+  /**
+   * Al hacer clic en "Continuar con Google", despliega el modal interactivo
+   * con el logotipo oficial de Google y el título "Elige una cuenta"
+   */
+  const handleGoogleLogin = () => {
+    setErrorMessage('');
+    setShowGoogleModal(true);
+  };
+
+  /**
+   * Procesa la cuenta seleccionada en el modal, enviando los datos al backend
+   * (/api/auth/google) para autenticar o auto-registrar al usuario en PostgreSQL (CA4)
+   */
+  const handleAccountSelectedFromModal = async (account) => {
+    setShowGoogleModal(false);
+    try {
+      setGoogleLoading(true);
+      setErrorMessage('');
+
+      await loginWithGoogle({
+        id: account.id,
+        googleId: account.googleId || account.id,
+        uid_auth: account.uid_auth || account.id,
+        email: account.email,
+        name: account.name,
+        password: account.password,
+        photoUrl: account.photoUrl || account.picture,
+        ubicacion_general: account.ubicacion_general || 'Sector Comunitario / Por definir'
+      });
+    } catch (error) {
+      console.error('[GoogleLogin Error]:', error);
+      setErrorMessage(error.message || 'Error al autenticar con la cuenta de Google seleccionada.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  /**
+   * Inicio de sesión con correo y contraseña con validación estricta de seguridad
+   */
   const handleLogin = async () => {
     if (!correo.trim() || !password) {
       setErrorMessage('Por favor ingresa tu correo y contraseña.');
+      return;
+    }
+
+    // Validación estricta de contraseña (longitud mínima 6, letras y números)
+    const passValidation = validatePassword(password);
+    if (!passValidation.isValid) {
+      setErrorMessage(passValidation.message);
       return;
     }
 
@@ -37,30 +87,6 @@ export default function LoginScreen({ navigation }) {
       setErrorMessage(error.message || 'Error al iniciar sesión. Verifica tus credenciales.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      setGoogleLoading(true);
-      setErrorMessage('');
-      const googleRes = await GoogleAuthService.signInAsync();
-
-      if (googleRes.success && googleRes.profile) {
-        await loginWithGoogle({
-          email: googleRes.profile.email,
-          name: googleRes.profile.name,
-          photoUrl: googleRes.profile.photoUrl,
-          googleId: googleRes.profile.googleId,
-          ubicacion_general: googleRes.profile.ubicacion_general
-        });
-      } else if (googleRes.message) {
-        setErrorMessage(googleRes.message);
-      }
-    } catch (error) {
-      setErrorMessage(error.message || 'No se pudo completar el inicio de sesión con Google.');
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -97,7 +123,7 @@ export default function LoginScreen({ navigation }) {
             </View>
           ) : null}
 
-          {/* Botón de Acceso Rápido con Google */}
+          {/* Botón de Acceso con Google */}
           <TouchableOpacity
             style={styles.googleButton}
             onPress={handleGoogleLogin}
@@ -141,18 +167,27 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              autoCapitalize="none"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (errorMessage) setErrorMessage('');
-              }}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="••••••••"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.eyeIconText}>{showPassword ? '👁️' : '🔒'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -176,6 +211,13 @@ export default function LoginScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Selector Modal Inteligente y Sincronizado de Cuentas Google */}
+      <GoogleAccountSelectorModal
+        visible={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSelectAccount={handleAccountSelectedFromModal}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -343,6 +385,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 14,
     color: Colors.textPrimary
+  },
+  passwordWrapper: {
+    position: 'relative',
+    justifyContent: 'center'
+  },
+  passwordInput: {
+    paddingRight: 44
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4
+  },
+  eyeIconText: {
+    fontSize: 16
   },
   primaryButton: {
     height: 50,

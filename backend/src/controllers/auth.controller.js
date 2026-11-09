@@ -29,10 +29,13 @@ const register = async (req, res, next) => {
       });
     }
 
-    if (!password || typeof password !== 'string' || password.length < 6) {
+    // Validación estricta de contraseña: mínimo 6 caracteres, con letras y números
+    const hasLetter = /[a-zA-Z]/.test(password || '');
+    const hasNumberOrSpecial = /[0-9!@#$%^&*(),.?":{}|<>]/.test(password || '');
+    if (!password || typeof password !== 'string' || password.length < 6 || !hasLetter || !hasNumberOrSpecial) {
       return res.status(400).json({
         success: false,
-        message: 'La contraseña es requerida y debe contener al menos 6 caracteres.'
+        message: 'La contraseña debe tener al menos 6 caracteres e incluir letras y números.'
       });
     }
 
@@ -167,12 +170,20 @@ const login = async (req, res, next) => {
 };
 
 /**
- * Google Auth: Inicio de sesión o registro rápido con cuenta de Google
- * Compatible con tokens de Google ID Token y perfiles OAuth2 de Expo/Web
+ * Google Auth (HU-03): Inicio de sesión o registro rápido con cuenta de Google
+ * Criterios de Aceptación CA1 - CA4:
+ * - Recibe id/googleId (uid_auth), email y name reales desde la API de Google.
+ * - Verifica si la cuenta ya existe en PostgreSQL por su uid_auth o correo.
+ * - Si existe: Retorna el token de sesión e inicia sesión normalmente.
+ * - Si es el primer acceso (CA4): Registra automáticamente el nuevo usuario en la tabla usuarios
+ *   usando su uid_auth real de Google, su nombre y su correo, y luego inicia sesión.
  */
 const googleLogin = async (req, res, next) => {
   try {
-    const { email, name, photoUrl, googleId, ubicacion_general } = req.body;
+    const { id, googleId, uid_auth, email, name, password, photoUrl, picture, ubicacion_general } = req.body;
+
+    // Obtener uid_auth real de Google
+    const realGoogleUid = id || googleId || uid_auth;
 
     if (!email || !EMAIL_REGEX.test(email.trim())) {
       return res.status(400).json({
@@ -181,24 +192,32 @@ const googleLogin = async (req, res, next) => {
       });
     }
 
+    if (!realGoogleUid) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se recibió el identificador único (uid/id) de la cuenta de Google.'
+      });
+    }
+
     const emailNormalizado = email.trim().toLowerCase();
-    const nombreUsuario = name ? name.trim() : 'Miembro Comunitario';
-    const foto = photoUrl || null;
-    const ubicacionDefault = ubicacion_general && ubicacion_general.trim()
+    const nombreUsuario = (name && name.trim()) ? name.trim() : 'Miembro Comunitario';
+    const foto = photoUrl || picture || null;
+    const ubicacionDefault = (ubicacion_general && ubicacion_general.trim())
       ? ubicacion_general.trim()
       : 'Sector Comunitario / Por definir';
 
-    // 1. Verificar si el usuario ya existe por su correo
+    // 1. Verificar si el usuario ya existe en PostgreSQL por su uid_auth o por su correo
     const existingResult = await db.query(
       `SELECT id, uid_auth, nombre, correo, foto_perfil, ubicacion_general, reputacion, rol, estado_cuenta, fecha_registro
        FROM usuarios 
-       WHERE LOWER(correo) = $1`,
-      [emailNormalizado]
+       WHERE uid_auth = $1 OR LOWER(correo) = $2`,
+      [String(realGoogleUid), emailNormalizado]
     );
 
     let user;
 
     if (existingResult.rows.length > 0) {
+      // Usuario ya existe en el sistema
       user = existingResult.rows[0];
 
       if (user.estado_cuenta !== 'activo') {
@@ -208,27 +227,47 @@ const googleLogin = async (req, res, next) => {
         });
       }
 
-      // Si no tenía foto y Google nos provee una, la actualizamos opcionalmente
+      // Si no tenía su uid_auth de Google o foto actualizada, los sincronizamos
+      const updates = [];
+      const updateValues = [];
+      let paramIndex = 1;
+
+      if (!user.uid_auth || user.uid_auth !== String(realGoogleUid)) {
+        updates.push(`uid_auth = $${paramIndex++}`);
+        updateValues.push(String(realGoogleUid));
+        user.uid_auth = String(realGoogleUid);
+      }
+
       if (!user.foto_perfil && foto) {
-        await db.query('UPDATE usuarios SET foto_perfil = $1 WHERE id = $2', [foto, user.id]);
+        updates.push(`foto_perfil = $${paramIndex++}`);
+        updateValues.push(foto);
         user.foto_perfil = foto;
       }
+
+      if (updates.length > 0) {
+        updateValues.push(user.id);
+        await db.query(
+          `UPDATE usuarios SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+          updateValues
+        );
+      }
     } else {
-      // 2. Si no existe, crear usuario nuevo con Google
-      // Se genera un hash aleatorio criptográficamente seguro para respetar la restricción NOT NULL de password_hash
-      const randomSecret = crypto.randomBytes(32).toString('hex');
+      // 2. CA4: Primer acceso -> Registro automático del nuevo usuario
+      // Se genera un hash seguro usando la contraseña suministrada o una clave criptográfica de respaldo
+      const rawPassword = (password && typeof password === 'string' && password.trim().length >= 6)
+        ? password.trim()
+        : crypto.randomBytes(32).toString('hex');
       const salt = await bcrypt.genSalt(10);
-      const generatedPasswordHash = await bcrypt.hash(randomSecret, salt);
-      const googleUid = googleId || `google_${crypto.randomUUID()}`;
+      const generatedPasswordHash = await bcrypt.hash(rawPassword, salt);
 
       const insertQuery = `
         INSERT INTO usuarios (uid_auth, nombre, correo, password_hash, ubicacion_general, foto_perfil)
         VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, nombre, correo, foto_perfil, ubicacion_general, reputacion, rol, estado_cuenta, fecha_registro
+        RETURNING id, uid_auth, nombre, correo, foto_perfil, ubicacion_general, reputacion, rol, estado_cuenta, fecha_registro
       `;
 
       const insertValues = [
-        googleUid,
+        String(realGoogleUid),
         nombreUsuario,
         emailNormalizado,
         generatedPasswordHash,
@@ -240,7 +279,7 @@ const googleLogin = async (req, res, next) => {
       user = insertResult.rows[0];
     }
 
-    // 3. Generar JWT firmado
+    // 3. Generar token JWT seguro
     const token = generateToken({
       id: user.id,
       correo: user.correo,

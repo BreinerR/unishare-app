@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import Colors, { EUCALIPTO_PALETTE } from '../../constants/colors';
-import GoogleAuthService from '../../services/googleAuth';
+import GoogleAccountSelectorModal from '../../components/auth/GoogleAccountSelectorModal';
+import { validatePassword } from '../../utils/validators';
 
 export default function RegisterScreen({ navigation }) {
   const { register, loginWithGoogle } = useAuth();
@@ -20,10 +21,41 @@ export default function RegisterScreen({ navigation }) {
   const [nombre, setNombre] = useState('');
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [ubicacionGeneral, setUbicacionGeneral] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+
+  const handleGoogleRegister = () => {
+    setErrorMessage('');
+    setShowGoogleModal(true);
+  };
+
+  const handleAccountSelectedFromModal = async (account) => {
+    setShowGoogleModal(false);
+    try {
+      setGoogleLoading(true);
+      setErrorMessage('');
+
+      await loginWithGoogle({
+        id: account.id,
+        googleId: account.googleId || account.id,
+        uid_auth: account.uid_auth || account.id,
+        email: account.email,
+        name: account.name,
+        password: account.password,
+        photoUrl: account.photoUrl || account.picture,
+        ubicacion_general: ubicacionGeneral.trim() || account.ubicacion_general || 'Sector Comunitario / Por definir'
+      });
+    } catch (error) {
+      console.error('[GoogleRegister Error]:', error);
+      setErrorMessage(error.message || 'Error al autenticar con la cuenta de Google seleccionada.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!nombre.trim() || !correo.trim() || !password) {
@@ -31,8 +63,10 @@ export default function RegisterScreen({ navigation }) {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMessage('La contraseña debe tener al menos 6 caracteres.');
+    // Validación estricta de contraseña (longitud mínima 6, letras y números)
+    const passValidation = validatePassword(password);
+    if (!passValidation.isValid) {
+      setErrorMessage(passValidation.message);
       return;
     }
 
@@ -49,30 +83,6 @@ export default function RegisterScreen({ navigation }) {
       setErrorMessage(error.message || 'Error al crear la cuenta comunitaria. Intenta nuevamente.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleRegister = async () => {
-    try {
-      setGoogleLoading(true);
-      setErrorMessage('');
-      const googleRes = await GoogleAuthService.signInAsync();
-
-      if (googleRes.success && googleRes.profile) {
-        await loginWithGoogle({
-          email: googleRes.profile.email,
-          name: googleRes.profile.name,
-          photoUrl: googleRes.profile.photoUrl,
-          googleId: googleRes.profile.googleId,
-          ubicacion_general: ubicacionGeneral.trim() || googleRes.profile.ubicacion_general
-        });
-      } else if (googleRes.message) {
-        setErrorMessage(googleRes.message);
-      }
-    } catch (error) {
-      setErrorMessage(error.message || 'No se pudo vincular tu cuenta de Google.');
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -159,18 +169,30 @@ export default function RegisterScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Contraseña *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Mínimo 6 caracteres"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              autoCapitalize="none"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (errorMessage) setErrorMessage('');
-              }}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="Mínimo 6 caracteres (letras y números)"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.eyeIconText}>{showPassword ? '👁️' : '🔒'}</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.passwordHintText}>
+              Debe contener al menos 6 caracteres e incluir letras y números.
+            </Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -211,6 +233,13 @@ export default function RegisterScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Selector Modal Inteligente y Sincronizado de Cuentas Google */}
+      <GoogleAccountSelectorModal
+        visible={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSelectAccount={handleAccountSelectedFromModal}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -352,6 +381,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 14,
     color: Colors.textPrimary
+  },
+  passwordWrapper: {
+    position: 'relative',
+    justifyContent: 'center'
+  },
+  passwordInput: {
+    paddingRight: 44
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4
+  },
+  eyeIconText: {
+    fontSize: 16
+  },
+  passwordHintText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 4
   },
   privacyNoticeContainer: {
     flexDirection: 'row',
