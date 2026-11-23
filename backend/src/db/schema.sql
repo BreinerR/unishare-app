@@ -16,7 +16,7 @@ CREATE TYPE tipo_disponibilidad AS ENUM ('prestamo', 'trueque', 'ambos');
 CREATE TYPE estado_objeto AS ENUM ('disponible', 'en_prestamo', 'intercambiado', 'reservado', 'inactivo');
 CREATE TYPE tipo_solicitud AS ENUM ('prestamo', 'trueque');
 CREATE TYPE estado_solicitud AS ENUM ('pendiente', 'aceptada', 'rechazada', 'cancelada');
-CREATE TYPE estado_prestamo AS ENUM ('activo', 'devuelto', 'atrasado', 'en_disputa');
+CREATE TYPE estado_prestamo AS ENUM ('PENDIENTE', 'ACTIVA', 'RECHAZADA', 'DEVUELTA', 'VENCIDO');
 CREATE TYPE estado_trueque AS ENUM ('acordado', 'completado', 'cancelado', 'en_disputa');
 CREATE TYPE tipo_elemento_reporte AS ENUM ('usuario', 'objeto', 'solicitud', 'comentario');
 CREATE TYPE estado_reporte AS ENUM ('pendiente', 'en_revision', 'resuelto', 'descartado');
@@ -90,24 +90,31 @@ CREATE INDEX idx_solicitudes_solicitante ON solicitudes(id_solicitante);
 CREATE INDEX idx_solicitudes_estado ON solicitudes(estado);
 
 -- ------------------------------------------------------------------------------
--- 5. TABLA: prestamos
+-- 5. TABLA: prestamos (HU-12 a HU-15)
 -- ------------------------------------------------------------------------------
 CREATE TABLE prestamos (
     id SERIAL PRIMARY KEY,
-    id_solicitud INT UNIQUE NOT NULL, -- Una solicitud aprobada deriva en exactamente un préstamo
-    fecha_inicio TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    fecha_vencimiento TIMESTAMPTZ NOT NULL,
-    fecha_devolucion TIMESTAMPTZ,
-    estado estado_prestamo DEFAULT 'activo' NOT NULL,
+    id_solicitud INT, -- Opcional / nullable para compatibilidad con esquemas anteriores
+    objeto_id INT NOT NULL REFERENCES objetos(id) ON DELETE CASCADE,
+    solicitante_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    propietario_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    fecha_inicio DATE NOT NULL DEFAULT CURRENT_DATE,
+    fecha_fin DATE NOT NULL DEFAULT CURRENT_DATE,
+    fecha_vencimiento DATE, -- Opcional / retrocompatibilidad con esquemas anteriores
+    estado VARCHAR(30) DEFAULT 'PENDIENTE' NOT NULL, -- 'PENDIENTE', 'ACTIVA', 'RECHAZADA', 'DEVUELTA', 'VENCIDO'
+    fecha_devolucion_real TIMESTAMPTZ,
+    mensaje TEXT,
+    creado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    actualizado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     
-    CONSTRAINT fk_prestamo_solicitud FOREIGN KEY (id_solicitud) 
-        REFERENCES solicitudes(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_fechas_prestamo CHECK (fecha_vencimiento >= fecha_inicio),
-    CONSTRAINT chk_devolucion_valida CHECK (fecha_devolucion IS NULL OR fecha_devolucion >= fecha_inicio)
+    CONSTRAINT chk_prestamo_estado CHECK (estado IN ('PENDIENTE', 'ACTIVA', 'RECHAZADA', 'DEVUELTA', 'VENCIDO')),
+    CONSTRAINT chk_fechas_prestamo CHECK (fecha_fin >= fecha_inicio)
 );
 
 -- Índices préstamos
-CREATE INDEX idx_prestamos_solicitud ON prestamos(id_solicitud);
+CREATE INDEX idx_prestamos_objeto ON prestamos(objeto_id);
+CREATE INDEX idx_prestamos_solicitante ON prestamos(solicitante_id);
+CREATE INDEX idx_prestamos_propietario ON prestamos(propietario_id);
 CREATE INDEX idx_prestamos_estado ON prestamos(estado);
 
 -- ------------------------------------------------------------------------------
@@ -132,38 +139,27 @@ CREATE INDEX idx_trueques_solicitud ON trueques(id_solicitud);
 CREATE INDEX idx_trueques_objeto_ofrecido ON trueques(id_objeto_ofrecido);
 
 -- ------------------------------------------------------------------------------
--- 7. TABLA: calificaciones
+-- 7. TABLA: calificaciones (HU-05)
 -- ------------------------------------------------------------------------------
 CREATE TABLE calificaciones (
     id SERIAL PRIMARY KEY,
-    id_usuario_calificador INT NOT NULL,
-    id_usuario_calificado INT NOT NULL,
-    id_prestamo INT,
-    id_trueque INT,
+    prestamo_id INT NOT NULL REFERENCES prestamos(id) ON DELETE CASCADE,
+    evaluador_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    evaluado_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    id_usuario_calificador INT, -- Opcional / compatibilidad con esquemas anteriores
+    id_usuario_calificado INT,  -- Opcional / compatibilidad con esquemas anteriores
     puntuacion SMALLINT NOT NULL CHECK (puntuacion >= 1 AND puntuacion <= 5),
     comentario TEXT,
-    fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    creado_en TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     
-    CONSTRAINT fk_calif_calificador FOREIGN KEY (id_usuario_calificador) 
-        REFERENCES usuarios(id) ON DELETE CASCADE,
-    CONSTRAINT fk_calif_calificado FOREIGN KEY (id_usuario_calificado) 
-        REFERENCES usuarios(id) ON DELETE CASCADE,
-    CONSTRAINT fk_calif_prestamo FOREIGN KEY (id_prestamo) 
-        REFERENCES prestamos(id) ON DELETE SET NULL,
-    CONSTRAINT fk_calif_trueque FOREIGN KEY (id_trueque) 
-        REFERENCES trueques(id) ON DELETE SET NULL,
-    CONSTRAINT chk_auto_calificacion CHECK (id_usuario_calificador <> id_usuario_calificado),
-    -- Regla de integridad: debe relacionarse o bien con un préstamo o con un trueque
-    CONSTRAINT chk_origen_transaccion CHECK (
-        (id_prestamo IS NOT NULL AND id_trueque IS NULL) OR 
-        (id_prestamo IS NULL AND id_trueque IS NOT NULL)
-    )
+    CONSTRAINT uq_calificacion_prestamo_evaluador UNIQUE (prestamo_id, evaluador_id),
+    CONSTRAINT chk_auto_calificacion CHECK (evaluador_id <> evaluado_id)
 );
 
 -- Índices calificaciones
-CREATE INDEX idx_calificaciones_calificado ON calificaciones(id_usuario_calificado);
-CREATE INDEX idx_calificaciones_prestamo ON calificaciones(id_prestamo);
-CREATE INDEX idx_calificaciones_trueque ON calificaciones(id_trueque);
+CREATE INDEX idx_calificaciones_evaluado ON calificaciones(evaluado_id);
+CREATE INDEX idx_calificaciones_evaluador ON calificaciones(evaluador_id);
+CREATE INDEX idx_calificaciones_prestamo ON calificaciones(prestamo_id);
 
 -- ------------------------------------------------------------------------------
 -- 8. TABLA: notificaciones
