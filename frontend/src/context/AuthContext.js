@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import api from '../services/api';
 import Storage from '../services/storage';
+import { GoogleAuthService } from '../services/googleAuth';
 
 const AuthContext = createContext();
 
@@ -62,6 +63,18 @@ export const AuthProvider = ({ children }) => {
       setUser(res.user);
       await Storage.setItem('@unishare_token', res.token);
       await Storage.setItem('@unishare_user', JSON.stringify(res.user));
+
+      // Guardar en la lista dinámica de cuentas recordadas de Google si es @gmail.com
+      if (googleData.email && GoogleAuthService.isValidGmail(googleData.email)) {
+        await GoogleAuthService.saveRememberedAccount({
+          id: googleData.id || googleData.googleId || res.user.uid_auth,
+          name: googleData.name || res.user.nombre,
+          email: googleData.email,
+          photoUrl: googleData.photoUrl || googleData.picture || res.user.profile_image,
+          profile_image: googleData.photoUrl || googleData.picture || res.user.profile_image,
+          ubicacion_general: googleData.ubicacion_general || res.user.ubicacion_general
+        });
+      }
     }
     return res;
   };
@@ -78,19 +91,37 @@ export const AuthProvider = ({ children }) => {
       setUser(res.user);
       await Storage.setItem('@unishare_token', res.token);
       await Storage.setItem('@unishare_user', JSON.stringify(res.user));
+
+      // Sincronización automática con el selector de Google:
+      // Si el usuario se registra con un correo @gmail.com, se guarda en las cuentas recordadas del dispositivo
+      if (correo && GoogleAuthService.isValidGmail(correo)) {
+        await GoogleAuthService.saveRememberedAccount({
+          name: nombre,
+          email: correo,
+          ubicacion_general: ubicacion_general
+        });
+      }
     }
     return res;
   };
 
-  const updateProfile = async ({ nombre, ubicacion_general, foto_perfil }) => {
+  const updateProfile = async ({ nombre, ubicacion_general, profile_image }) => {
     const res = await api.put('/users/profile', {
       nombre,
       ubicacion_general,
-      foto_perfil
+      profile_image
     });
     if (res.success && res.user) {
       setUser(res.user);
       await Storage.setItem('@unishare_user', JSON.stringify(res.user));
+
+      // Sincronizar en la memoria local de cuentas de Google (HU-04)
+      if (res.user.correo && GoogleAuthService.isValidGmail(res.user.correo)) {
+        await GoogleAuthService.updateAccountPhoto(
+          res.user.correo,
+          res.user.profile_image || null
+        );
+      }
     }
     return res;
   };

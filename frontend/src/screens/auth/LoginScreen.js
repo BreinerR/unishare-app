@@ -11,21 +11,71 @@ import {
   ScrollView
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import Colors, { EUCALIPTO_PALETTE } from '../../constants/colors';
-import GoogleAuthService from '../../services/googleAuth';
+import Colors, { SICILY_PALETTE } from '../../constants/colors';
+import GoogleAccountSelectorModal from '../../components/auth/GoogleAccountSelectorModal';
+import { validatePassword } from '../../utils/validators';
 
 export default function LoginScreen({ navigation }) {
   const { login, loginWithGoogle } = useAuth();
 
   const [correo, setCorreo] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
 
+  /**
+   * Al hacer clic en "Continuar con Google", despliega el modal interactivo
+   * con el logotipo oficial de Google y el título "Elige una cuenta"
+   */
+  const handleGoogleLogin = () => {
+    setErrorMessage('');
+    setShowGoogleModal(true);
+  };
+
+  /**
+   * Procesa la cuenta seleccionada en el modal, enviando los datos al backend
+   * (/api/auth/google) para autenticar o auto-registrar al usuario en PostgreSQL (CA4)
+   */
+  const handleAccountSelectedFromModal = async (account) => {
+    setShowGoogleModal(false);
+    try {
+      setGoogleLoading(true);
+      setErrorMessage('');
+
+      await loginWithGoogle({
+        id: account.id,
+        googleId: account.googleId || account.id,
+        uid_auth: account.uid_auth || account.id,
+        email: account.email,
+        name: account.name,
+        password: account.password,
+        photoUrl: account.photoUrl || account.picture,
+        ubicacion_general: account.ubicacion_general || 'Sector Comunitario / Por definir'
+      });
+    } catch (error) {
+      console.error('[GoogleLogin Error]:', error);
+      setErrorMessage(error.message || 'Error al autenticar con la cuenta de Google seleccionada.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  /**
+   * Inicio de sesión con correo y contraseña con validación estricta de seguridad
+   */
   const handleLogin = async () => {
     if (!correo.trim() || !password) {
       setErrorMessage('Por favor ingresa tu correo y contraseña.');
+      return;
+    }
+
+    // Validación estricta de contraseña (longitud mínima 6, letras y números)
+    const passValidation = validatePassword(password);
+    if (!passValidation.isValid) {
+      setErrorMessage(passValidation.message);
       return;
     }
 
@@ -37,30 +87,6 @@ export default function LoginScreen({ navigation }) {
       setErrorMessage(error.message || 'Error al iniciar sesión. Verifica tus credenciales.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      setGoogleLoading(true);
-      setErrorMessage('');
-      const googleRes = await GoogleAuthService.signInAsync();
-
-      if (googleRes.success && googleRes.profile) {
-        await loginWithGoogle({
-          email: googleRes.profile.email,
-          name: googleRes.profile.name,
-          photoUrl: googleRes.profile.photoUrl,
-          googleId: googleRes.profile.googleId,
-          ubicacion_general: googleRes.profile.ubicacion_general
-        });
-      } else if (googleRes.message) {
-        setErrorMessage(googleRes.message);
-      }
-    } catch (error) {
-      setErrorMessage(error.message || 'No se pudo completar el inicio de sesión con Google.');
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -97,7 +123,7 @@ export default function LoginScreen({ navigation }) {
             </View>
           ) : null}
 
-          {/* Botón de Acceso Rápido con Google */}
+          {/* Botón de Acceso con Google */}
           <TouchableOpacity
             style={styles.googleButton}
             onPress={handleGoogleLogin}
@@ -141,18 +167,27 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              autoCapitalize="none"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (errorMessage) setErrorMessage('');
-              }}
-            />
+            <View style={styles.passwordWrapper}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                placeholder="••••••••"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.eyeIconText}>{showPassword ? '👁️' : '🔒'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -176,6 +211,13 @@ export default function LoginScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {/* Selector Modal Inteligente y Sincronizado de Cuentas Google */}
+      <GoogleAccountSelectorModal
+        visible={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSelectAccount={handleAccountSelectedFromModal}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -183,7 +225,7 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
-    backgroundColor: EUCALIPTO_PALETTE.verdeOscuro // #233B32 Protagonista de fondo
+    backgroundColor: SICILY_PALETTE.azulProfundo // #1D59BB Identidad de marca
   },
   scrollContainer: {
     flexGrow: 1,
@@ -199,12 +241,12 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: 'rgba(221, 238, 227, 0.15)', // Fondo claro translúcido
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: Colors.accent // #8FBBA6
+    borderColor: SICILY_PALETTE.amarilloCalido // #FEBD19
   },
   brandIconText: {
     fontSize: 32
@@ -216,7 +258,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5
   },
   communityPill: {
-    backgroundColor: EUCALIPTO_PALETTE.fondoClaro,
+    backgroundColor: SICILY_PALETTE.amarilloCalido,
     paddingHorizontal: 14,
     paddingVertical: 4,
     borderRadius: 20,
@@ -224,13 +266,13 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   communityPillText: {
-    color: EUCALIPTO_PALETTE.verdeOscuro,
+    color: SICILY_PALETTE.textoOscuro,
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   appSubtitle: {
     fontSize: 13,
-    color: EUCALIPTO_PALETTE.fondoClaro,
+    color: '#EBF3FE',
     textAlign: 'center',
     paddingHorizontal: 16,
     lineHeight: 18,
@@ -344,16 +386,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textPrimary
   },
+  passwordWrapper: {
+    position: 'relative',
+    justifyContent: 'center'
+  },
+  passwordInput: {
+    paddingRight: 44
+  },
+  eyeBtn: {
+    position: 'absolute',
+    right: 12,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4
+  },
+  eyeIconText: {
+    fontSize: 16
+  },
   primaryButton: {
     height: 50,
-    backgroundColor: EUCALIPTO_PALETTE.verdeOscuro, // #233B32
+    backgroundColor: SICILY_PALETTE.amarilloCalido, // #FEBD19 Acción Principal
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: EUCALIPTO_PALETTE.verdeOscuro,
+    shadowColor: SICILY_PALETTE.amarilloCalido,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 3
   },
@@ -361,9 +421,9 @@ const styles = StyleSheet.create({
     opacity: 0.7
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: SICILY_PALETTE.textoOscuro,
     fontSize: 16,
-    fontWeight: '700'
+    fontWeight: '800'
   },
   footerLinkContainer: {
     flexDirection: 'row',
@@ -376,7 +436,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Colors.secondary // #4C7A66
+    fontWeight: '800',
+    color: SICILY_PALETTE.azulProfundo
   }
 });

@@ -7,7 +7,7 @@ import {
   ScrollView,
   ActivityIndicator
 } from 'react-native';
-import Colors, { EUCALIPTO_PALETTE } from '../../constants/colors';
+import Colors, { SICILY_PALETTE } from '../../constants/colors';
 import api from '../../services/api';
 import { DEFAULT_COMMUNITY_ZONES, PRIVACY_POLICY } from '../../utils/privacyLocation';
 
@@ -170,17 +170,17 @@ const styles = StyleSheet.create({
     color: Colors.primary
   },
   privacyShield: {
-    backgroundColor: EUCALIPTO_PALETTE.fondoClaro,
+    backgroundColor: SICILY_PALETTE.amarilloSuave,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.accent
+    borderColor: 'rgba(254, 189, 25, 0.4)'
   },
   privacyShieldText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.primary
+    color: '#8A5D00'
   },
   privacySubtitle: {
     fontSize: 12,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
   mapCanvas: {
     height: 160,
-    backgroundColor: EUCALIPTO_PALETTE.verdeOscuro, // #233B32
+    backgroundColor: SICILY_PALETTE.azulProfundo, // #1D59BB
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -246,20 +246,20 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
   overlayMeetingPoint: {
-    color: EUCALIPTO_PALETTE.fondoClaro,
+    color: SICILY_PALETTE.amarilloSuave,
     fontSize: 11,
     marginTop: 1
   },
   overlayBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(143, 187, 166, 0.3)',
+    backgroundColor: 'rgba(254, 189, 25, 0.3)',
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginTop: 4
   },
   overlayBadgeText: {
-    color: Colors.accent,
+    color: SICILY_PALETTE.amarilloCalido,
     fontSize: 10,
     fontWeight: '600'
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   zoneChip: {
-    backgroundColor: '#F3FAF5',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 12,
@@ -283,8 +283,8 @@ const styles = StyleSheet.create({
     minWidth: 150
   },
   zoneChipSelected: {
-    backgroundColor: EUCALIPTO_PALETTE.verdeOscuro, // #233B32
-    borderColor: Colors.primary
+    backgroundColor: SICILY_PALETTE.azulProfundo, // #1D59BB
+    borderColor: SICILY_PALETTE.azulProfundo
   },
   zoneChipName: {
     fontSize: 12,
@@ -302,6 +302,6 @@ const styles = StyleSheet.create({
     color: Colors.secondary
   },
   zoneChipItemsSelected: {
-    color: EUCALIPTO_PALETTE.fondoClaro
+    color: SICILY_PALETTE.amarilloSuave
   }
 });

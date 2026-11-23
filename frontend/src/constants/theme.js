@@ -11,9 +11,10 @@ export const Theme = {
     xxl: 40
   },
   borderRadius: {
-    sm: 6,
-    md: 12,
-    lg: 18,
+    sm: 8,
+    md: 14,
+    lg: 20,
+    xl: 24,
     full: 9999
   },
   typography: {
@@ -33,11 +34,18 @@ export const Theme = {
   },
   shadows: {
     card: {
-      shadowColor: '#233B32',
-      shadowOffset: { width: 0, height: 2 },
+      shadowColor: '#1D59BB',
+      shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
-      shadowRadius: 6,
+      shadowRadius: 10,
       elevation: 3
+    },
+    floating: {
+      shadowColor: '#0D2149',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      elevation: 6
     }
   }
 };

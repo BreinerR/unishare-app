@@ -4,12 +4,18 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuth } from '../context/AuthContext';
-import Colors, { EUCALIPTO_PALETTE } from '../constants/colors';
+import Colors, { SICILY_PALETTE } from '../constants/colors';
 
-// Pantallas
+// Pantallas de Autenticación
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
-import ProfileScreen from '../screens/profile/ProfileScreen';
+
+// Navegador Principal Flotante (Bottom Tabs)
+import MainTabNavigator from './MainTabNavigator';
+
+// Pantallas de Detalle y Edición de Objetos
+import ItemDetailScreen from '../screens/items/ItemDetailScreen';
+import EditObjectScreen from '../screens/items/EditObjectScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,11 +35,11 @@ export default function RootNavigator() {
       <Stack.Navigator
         screenOptions={{
           headerStyle: {
-            backgroundColor: EUCALIPTO_PALETTE.verdeOscuro // #233B32
+            backgroundColor: SICILY_PALETTE.azulProfundo
           },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: {
-            fontWeight: 'bold',
+            fontWeight: '700',
             fontSize: 18
           },
           contentStyle: {
@@ -53,29 +59,48 @@ export default function RootNavigator() {
               name="Register"
               component={RegisterScreen}
               options={{
-                title: 'Unirme a la Red',
+                title: 'Crear Cuenta Comunitaria',
                 headerBackTitle: 'Volver',
                 headerTintColor: '#FFFFFF',
                 headerStyle: {
-                  backgroundColor: EUCALIPTO_PALETTE.verdeOscuro
+                  backgroundColor: SICILY_PALETTE.azulProfundo
                 }
               }}
             />
           </>
         ) : (
           // Rutas Protegidas de la Aplicación
-          <Stack.Screen
-            name="Profile"
-            component={ProfileScreen}
-            options={{
-              title: 'Mi Perfil Comunitario',
-              headerTitleAlign: 'center',
-              headerTintColor: '#FFFFFF',
-              headerStyle: {
-                backgroundColor: EUCALIPTO_PALETTE.verdeOscuro
-              }
-            }}
-          />
+          <>
+            <Stack.Screen
+              name="MainApp"
+              component={MainTabNavigator}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ItemDetail"
+              component={ItemDetailScreen}
+              options={{
+                title: 'Detalle del Artículo',
+                headerTitleAlign: 'center',
+                headerTintColor: '#FFFFFF',
+                headerStyle: {
+                  backgroundColor: SICILY_PALETTE.azulProfundo
+                }
+              }}
+            />
+            <Stack.Screen
+              name="EditObject"
+              component={EditObjectScreen}
+              options={{
+                title: 'Editar Publicación',
+                headerTitleAlign: 'center',
+                headerTintColor: '#FFFFFF',
+                headerStyle: {
+                  backgroundColor: SICILY_PALETTE.azulProfundo
+                }
+              }}
+            />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
@@ -85,8 +110,8 @@ export default function RootNavigator() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.background
   }
 });
